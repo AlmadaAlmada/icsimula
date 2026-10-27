@@ -1,0 +1,11 @@
+# Configuração do Gitleaks: usa todas as regras padrão (+150 tipos de segredos)
+title = "SimulaFácil gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Arquivos gerados que não contêm segredos"
+paths = [
+  '''package-lock\.json''',
+]

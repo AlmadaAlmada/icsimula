@@ -1,3 +1,4 @@
+import { AdSlot } from './components/AdSlot';
 import { BUILD_INFO } from './buildInfo';
 import { useHashRoute, type Route } from './hooks/useHashRoute';
 import { AboutPage } from './pages/AboutPage';
@@ -46,11 +47,16 @@ export default function App() {
         </nav>
       </header>
 
+      <AdSlot slot="topo" />
+
       <div className="layout">
         <main id="conteudo">
           <Page />
         </main>
+        <AdSlot slot="lateral" />
       </div>
+
+      <AdSlot slot="rodape" />
 
       <footer className="footer">
         <p>SimulaFácil — simulações educativas, não constituem recomendação financeira.</p>

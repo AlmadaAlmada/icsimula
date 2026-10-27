@@ -1,4 +1,6 @@
+import { BUILD_INFO } from './buildInfo';
 import { useHashRoute, type Route } from './hooks/useHashRoute';
+import { AboutPage } from './pages/AboutPage';
 import { FinancingPage } from './pages/FinancingPage';
 import { GoalPage } from './pages/GoalPage';
 import { InvestmentPage } from './pages/InvestmentPage';
@@ -7,22 +9,20 @@ const NAV: { route: Route; label: string }[] = [
   { route: 'investimentos', label: 'Investimentos' },
   { route: 'financiamento', label: 'Financiamento' },
   { route: 'meta', label: 'Metas' },
+  { route: 'sobre', label: 'Sobre' },
 ];
 
-function pageFor(route: Route) {
-  switch (route) {
-    case 'financiamento':
-      return FinancingPage;
-    case 'meta':
-      return GoalPage;
-    default:
-      return InvestmentPage;
-  }
-}
+const PAGES: Record<Route, () => JSX.Element> = {
+  investimentos: InvestmentPage,
+  financiamento: FinancingPage,
+  meta: GoalPage,
+  sobre: AboutPage,
+};
 
 export default function App() {
   const route = useHashRoute();
-  const Page = pageFor(route);
+  // eslint-disable-next-line security/detect-object-injection -- route é sempre um valor validado de ROUTES
+  const Page = PAGES[route];
 
   return (
     <div className="app">
@@ -46,9 +46,18 @@ export default function App() {
         </nav>
       </header>
 
-      <main id="conteudo">
-        <Page />
-      </main>
+      <div className="layout">
+        <main id="conteudo">
+          <Page />
+        </main>
+      </div>
+
+      <footer className="footer">
+        <p>SimulaFácil — simulações educativas, não constituem recomendação financeira.</p>
+        <p className="footer__version" data-testid="app-version">
+          v{BUILD_INFO.version} · {BUILD_INFO.commit}
+        </p>
+      </footer>
     </div>
   );
 }

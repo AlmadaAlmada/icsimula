@@ -1,0 +1,16 @@
+name: 🐞 Bug
+description: Algo não funciona como esperado
+labels: [bug]
+body:
+  - type: textarea
+    id: descricao
+    attributes:
+      label: O que aconteceu?
+      description: Passos para reproduzir, resultado esperado e resultado obtido.
+    validations:
+      required: true
+  - type: input
+    id: versao
+    attributes:
+      label: Versão
+      description: Aparece no rodapé da aplicação (ex. v1.2.0 · a1b2c3d)

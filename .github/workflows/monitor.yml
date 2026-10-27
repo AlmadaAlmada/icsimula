@@ -1,0 +1,80 @@
+# Monitoramento da aplicação publicada (health check agendado).
+#   GitHub Actions → Aplicação publicada → Health Check → Sucesso/Falha
+#
+# CI/CD verifica se uma NOVA versão pode ser entregue.
+# Este workflow verifica se a versão JÁ PUBLICADA continua disponível.
+name: Monitoramento
+
+on:
+  schedule:
+    - cron: '*/30 * * * *' # a cada 30 minutos (o GitHub pode atrasar execuções agendadas em alguns minutos)
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'URL a verificar (vazio = URL padrão do GitHub Pages)'
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: monitor
+  cancel-in-progress: false
+
+jobs:
+  health-check:
+    name: Health check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write # abrir/fechar issue de incidente
+    env:
+      # Prioridade: input manual → variável do repositório APP_URL → URL padrão do Pages
+      APP_URL: ${{ inputs.url || vars.APP_URL || format('https://{0}.github.io/{1}/', github.repository_owner, github.event.repository.name) }}
+      INCIDENT_LABEL: incidente
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          sparse-checkout: scripts
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+
+      - name: Verificar disponibilidade (3 tentativas, 20 s entre elas)
+        id: check
+        continue-on-error: true
+        run: node scripts/smoke-test.mjs "$APP_URL" --retries 3 --delay 20
+
+      - name: Abrir issue de incidente (se indisponível)
+        if: steps.check.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPORT: ${{ steps.check.outputs.report }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create "$INCIDENT_LABEL" --color B60205 --description "Indisponibilidade detectada pelo monitoramento" 2>/dev/null || true
+          OPEN=$(gh issue list --label "$INCIDENT_LABEL" --state open --json number --jq '.[0].number')
+          BODY=$(printf '%s\n\n---\nExecução: %s' "${REPORT:-Falha ao acessar $APP_URL}" "$RUN_URL")
+          if [ -n "$OPEN" ]; then
+            gh issue comment "$OPEN" --body "$BODY"
+            echo "Incidente #$OPEN já aberto — comentário adicionado."
+          else
+            gh issue create --title "🚨 Aplicação indisponível: $APP_URL" --label "$INCIDENT_LABEL" --body "$BODY"
+          fi
+
+      - name: Fechar incidente aberto (se voltou ao normal)
+        if: steps.check.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          for n in $(gh issue list --label "$INCIDENT_LABEL" --state open --json number --jq '.[].number' 2>/dev/null); do
+            gh issue close "$n" --comment "✅ Aplicação voltou a responder normalmente. Verificação: $RUN_URL"
+          done
+
+      - name: Resultado final do monitoramento
+        if: steps.check.outcome == 'failure'
+        run: |
+          echo "::error title=Aplicação indisponível::$APP_URL não passou no health check"
+          exit 1

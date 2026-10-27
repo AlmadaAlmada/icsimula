@@ -1,0 +1,63 @@
+# Versionamento: ao criar uma tag SemVer (v1.2.3) gera um GitHub Release
+# com o artefato de build anexado, checksums e atestado de proveniência (supply chain).
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Publicar release ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # criar o release
+      id-token: write # atestado de proveniência
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+
+      - name: Conferir tag x package.json
+        run: |
+          PKG="v$(node -p 'require("./package.json").version')"
+          if [ "$PKG" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::A tag $GITHUB_REF_NAME não corresponde à versão do package.json ($PKG)"
+            exit 1
+          fi
+
+      - name: Validação completa (format, lint, tipos, testes, build)
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}/
+        run: npm run validate
+
+      - name: Empacotar artefato
+        run: |
+          cp dist/index.html dist/404.html
+          ARCHIVE="icsimula-${GITHUB_REF_NAME}.zip"
+          (cd dist && zip -qr "../$ARCHIVE" .)
+          sha256sum "$ARCHIVE" > "$ARCHIVE.sha256"
+          echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
+
+      - name: Atestado de proveniência do artefato
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-path: ${{ env.ARCHIVE }}
+
+      - name: Criar GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "$ARCHIVE" "$ARCHIVE.sha256" \
+            --title "SimulaFácil $GITHUB_REF_NAME" \
+            --generate-notes \
+            --verify-tag

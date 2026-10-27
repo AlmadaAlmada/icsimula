@@ -1,0 +1,127 @@
+# Bônus: containerização.
+# Build da imagem → execução em container → smoke test → scan de vulnerabilidades → publicação no GHCR.
+name: Docker
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - Dockerfile
+      - docker/**
+      - package*.json
+      - src/**
+      - .github/workflows/docker.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  image:
+    name: Build, teste, scan e publicação da imagem
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # publicar no GitHub Container Registry
+      id-token: write # atestado de proveniência
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Nome da imagem (o registry exige letras minúsculas)
+        run: echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+
+      - name: Metadados da imagem (tags e labels)
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build local da imagem (para testes)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          load: true
+          tags: icsimula:ci
+          build-args: GIT_SHA=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Executar container e testar
+        run: |
+          docker run -d --name icsimula -p 8080:8080 icsimula:ci
+          for i in $(seq 1 20); do
+            [ "$(docker inspect --format '{{.State.Health.Status}}' icsimula)" = "healthy" ] && break
+            sleep 2
+          done
+          docker inspect --format 'Health: {{.State.Health.Status}}' icsimula
+          node scripts/smoke-test.mjs http://localhost:8080/ --expect-commit "${{ github.sha }}" --retries 3 --delay 3
+          echo "Cabeçalhos de segurança:"
+          curl -sI http://localhost:8080/ | grep -iE 'content-security-policy|x-frame-options|x-content-type-options'
+          docker rm -f icsimula
+
+      - name: Scan de vulnerabilidades da imagem (Grype)
+        id: scan
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7
+        with:
+          image: icsimula:ci
+          fail-build: true
+          severity-cutoff: critical
+          only-fixed: true
+          output-format: table
+
+      - name: Login no GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }} # token efêmero do Actions — nenhuma credencial no código
+
+      - name: Publicar imagem (com SBOM e proveniência)
+        if: github.event_name != 'pull_request'
+        id: push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: GIT_SHA=${{ github.sha }}
+          sbom: true
+          provenance: mode=max
+          cache-from: type=gha
+
+      - name: Atestado de proveniência da imagem
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+      - name: Resumo
+        if: github.event_name != 'pull_request'
+        run: |
+          {
+            echo "## 🐳 Imagem publicada"
+            echo ""
+            echo "Digest: \`${{ steps.push.outputs.digest }}\`"
+            echo ""
+            echo '```'
+            echo "${{ steps.meta.outputs.tags }}"
+            echo '```'
+            echo ""
+            echo "Executar: \`docker run --rm -p 8080:8080 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest\`"
+          } >> "$GITHUB_STEP_SUMMARY"

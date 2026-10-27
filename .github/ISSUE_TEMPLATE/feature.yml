@@ -1,0 +1,11 @@
+name: ✨ Funcionalidade
+description: Sugira uma melhoria ou novo simulador
+labels: [enhancement]
+body:
+  - type: textarea
+    id: proposta
+    attributes:
+      label: Proposta
+      description: Qual problema resolve e como deveria funcionar?
+    validations:
+      required: true

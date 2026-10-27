@@ -2,7 +2,7 @@
 
 # ---------- Estágio 1: build ----------
 # Mesma versão de Node usada no pipeline de CI, garantindo builds reprodutíveis.
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 
 # Copia apenas os manifestos primeiro para aproveitar o cache de camadas do Docker.

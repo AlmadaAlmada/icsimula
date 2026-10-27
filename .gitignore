@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+reports/
+*.log
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Variáveis de ambiente locais NUNCA vão para o repositório
+.env
+.env.*
+!.env.example

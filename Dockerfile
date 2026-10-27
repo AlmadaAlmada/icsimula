@@ -20,6 +20,12 @@ RUN npm run build
 # código-fonte nem node_modules — somente o artefato estático (dist/).
 FROM nginxinc/nginx-unprivileged:stable-alpine AS runtime
 
+# Atualiza os pacotes do Alpine (a imagem base pode atrasar correções de segurança)
+# e remove o curl, que a aplicação não usa (o HEALTHCHECK usa o wget do BusyBox).
+USER root
+RUN apk upgrade --no-cache \
+ && (apk del --no-cache curl || true)
+
 LABEL org.opencontainers.image.title="SimulaFácil" \
       org.opencontainers.image.description="SPA de simuladores financeiros" \
       org.opencontainers.image.licenses="MIT"

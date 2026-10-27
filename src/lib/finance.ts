@@ -121,6 +121,19 @@ export function simulateCompound(
   };
 }
 
+/**
+ * Aporte mensal necessário para atingir uma meta, dado um valor inicial.
+ * Retorna 0 quando o valor inicial sozinho já atinge a meta.
+ */
+export function requiredMonthlyDeposit(goal: number, initial: number, monthlyRate: number, months: number): number {
+  assertPositiveInteger(months, 'prazo');
+  const growth = Math.pow(1 + monthlyRate, months);
+  const missing = goal - initial * growth;
+  if (missing <= 0) return 0;
+  if (monthlyRate === 0) return round2(missing / months);
+  return round2((missing * monthlyRate) / (growth - 1));
+}
+
 function summarize(system: 'PRICE' | 'SAC', principal: number, schedule: ScheduleRow[]): FinancingResult {
   const totalPaid = schedule.reduce((sum, row) => sum + row.payment, 0);
   const rounded = schedule.map((row) => ({

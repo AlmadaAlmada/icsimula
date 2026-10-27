@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { annualToMonthlyRate, pricePayment, round2, simulateCompound, simulatePrice, simulateSac } from './finance';
+import {
+  annualToMonthlyRate,
+  pricePayment,
+  requiredMonthlyDeposit,
+  round2,
+  simulateCompound,
+  simulatePrice,
+  simulateSac,
+} from './finance';
 
 describe('round2', () => {
   it('arredonda para duas casas decimais corrigindo ponto flutuante', () => {
@@ -114,5 +122,21 @@ describe('simulateCompound', () => {
     const n = 120;
     const expected = 5000 * Math.pow(1 + i, n) + (300 * (Math.pow(1 + i, n) - 1)) / i;
     expect(simulateCompound(5000, 300, i, n).finalAmount).toBeCloseTo(expected, 1);
+  });
+});
+
+describe('requiredMonthlyDeposit', () => {
+  it('calcula o aporte para atingir a meta', () => {
+    const deposit = requiredMonthlyDeposit(10_000, 0, 0.01, 12);
+    expect(deposit).toBeCloseTo(788.49, 2);
+    expect(simulateCompound(0, deposit, 0.01, 12).finalAmount).toBeCloseTo(10_000, 0);
+  });
+
+  it('com taxa zero divide o que falta pelo prazo', () => {
+    expect(requiredMonthlyDeposit(1200, 0, 0, 12)).toBe(100);
+  });
+
+  it('retorna 0 quando o valor inicial já basta', () => {
+    expect(requiredMonthlyDeposit(1000, 2000, 0.01, 12)).toBe(0);
   });
 });

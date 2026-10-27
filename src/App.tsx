@@ -1,16 +1,20 @@
 import { useHashRoute, type Route } from './hooks/useHashRoute';
 import { FinancingPage } from './pages/FinancingPage';
+import { GoalPage } from './pages/GoalPage';
 import { InvestmentPage } from './pages/InvestmentPage';
 
 const NAV: { route: Route; label: string }[] = [
   { route: 'investimentos', label: 'Investimentos' },
   { route: 'financiamento', label: 'Financiamento' },
+  { route: 'meta', label: 'Metas' },
 ];
 
 function pageFor(route: Route) {
   switch (route) {
     case 'financiamento':
       return FinancingPage;
+    case 'meta':
+      return GoalPage;
     default:
       return InvestmentPage;
   }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { annualToMonthlyRate, round2, simulateCompound } from './finance';
+import { annualToMonthlyRate, pricePayment, round2, simulateCompound, simulatePrice, simulateSac } from './finance';
 
 describe('round2', () => {
   it('arredonda para duas casas decimais corrigindo ponto flutuante', () => {
@@ -25,6 +25,67 @@ describe('annualToMonthlyRate', () => {
 
   it('rejeita taxas menores ou iguais a -100%', () => {
     expect(() => annualToMonthlyRate(-100)).toThrow(RangeError);
+  });
+});
+
+describe('pricePayment', () => {
+  it('calcula a parcela fixa clássica (100 mil, 1% a.m., 12 meses)', () => {
+    expect(pricePayment(100_000, 0.01, 12)).toBeCloseTo(8884.88, 2);
+  });
+
+  it('divide igualmente quando a taxa é zero', () => {
+    expect(pricePayment(1200, 0, 12)).toBe(100);
+  });
+
+  it.each([0, -1, 1.5, Number.NaN])('rejeita prazo inválido (%s)', (months) => {
+    expect(() => pricePayment(1000, 0.01, months)).toThrow(RangeError);
+  });
+});
+
+describe('simulatePrice', () => {
+  const result = simulatePrice(100_000, 0.01, 12);
+
+  it('gera uma linha por mês e quita o saldo', () => {
+    expect(result.schedule).toHaveLength(12);
+    expect(result.schedule.at(-1)?.balance).toBe(0);
+  });
+
+  it('mantém parcelas iguais', () => {
+    expect(result.firstPayment).toBe(8884.88);
+    expect(result.lastPayment).toBeCloseTo(8884.88, 1);
+  });
+
+  it('total pago = principal + juros', () => {
+    expect(result.totalPaid).toBeCloseTo(result.principal + result.totalInterest, 2);
+    expect(result.totalInterest).toBeCloseTo(6618.55, 1);
+  });
+
+  it('amortização cresce ao longo do tempo', () => {
+    expect(result.schedule[11].amortization).toBeGreaterThan(result.schedule[0].amortization);
+  });
+});
+
+describe('simulateSac', () => {
+  const result = simulateSac(120_000, 0.01, 12);
+
+  it('mantém amortização constante', () => {
+    const amortizations = new Set(result.schedule.map((row) => row.amortization));
+    expect(amortizations).toEqual(new Set([10_000]));
+  });
+
+  it('tem parcelas decrescentes', () => {
+    expect(result.firstPayment).toBe(11_200);
+    expect(result.lastPayment).toBe(10_100);
+  });
+
+  it('total de juros é menor que no sistema Price com os mesmos parâmetros', () => {
+    const price = simulatePrice(120_000, 0.01, 12);
+    expect(result.totalInterest).toBeLessThan(price.totalInterest);
+    expect(result.totalInterest).toBe(7800);
+  });
+
+  it('rejeita prazo inválido', () => {
+    expect(() => simulateSac(1000, 0.01, 0)).toThrow(RangeError);
   });
 });
 

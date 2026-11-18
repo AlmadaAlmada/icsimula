@@ -2,6 +2,7 @@ import { Card } from '../components/ui';
 import { BUILD_INFO } from '../buildInfo';
 
 export function AboutPage() {
+  console.log("debug");
   return (
     <div className="page">
       <Card title="Sobre o SimulaFácil">
